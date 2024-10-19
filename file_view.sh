@@ -1,24 +1,24 @@
 #!/bin/bash
 
-# 初始化界面，显示当前目录和提示信息
+# Initialize UI, display current directory and prompt message
 function init_ui {
-    tput clear  # 清屏
-    echo "当前目录：$(pwd)"
-    echo "使用上下键选择，右箭头进入文件夹，左箭头返回上一层，按 q 退出。"
-    # 动态生成分隔符，长度与窗口宽度一致
+    tput clear  # Clear the screen
+    echo "Current directory: $(pwd)"
+    echo "Use the arrow keys to navigate, right arrow to enter folder, left arrow to go back, press q to quit."
+    # Dynamically generate separator, matching the width of the terminal
     local total_width=$(tput cols)
     printf '=%.0s' $(eval "echo {1..$total_width}")
     echo ""
 }
 
-# 将字节数转为人类可读格式（KB、MB等）
+# Convert byte size to human-readable format (KB, MB, etc.)
 function human_readable_size {
     size=$1
     if command -v numfmt > /dev/null; then
-        # 使用 numfmt 转换，并在数字和单位之间添加空格
+        # Use numfmt for conversion, adding a space between number and unit
         numfmt --to=iec --suffix=" B" --format="%.1f" "$size"
     else
-        # 手动转换为可读格式，添加空格
+        # Manually convert to readable format, adding a space
         if [ "$size" -lt 1024 ]; then
             echo "${size} B"
         elif [ "$size" -lt 1048576 ]; then
@@ -31,173 +31,173 @@ function human_readable_size {
     fi
 }
 
-# 列出当前目录下的所有文件和文件夹，并手动分类
+# List all files and directories in the current directory, and categorize them
 function list_items {
     items=()
     items_details=()
 
-    # 先获取目录
+    # Get directories first
     for file in $(ls -1a); do
         if [ -d "$file" ]; then
             items+=("$file")
-            items_details+=("")  # 目录不需要显示大小
+            items_details+=("")  # Directories do not need to show size
         fi
     done
 
-    # 再获取文件
+    # Get files next
     for file in $(ls -1a); do
         if [ ! -d "$file" ]; then
             items+=("$file")
-            # 获取文件大小
+            # Get file size
             size=$(stat -c%s "$file" 2>/dev/null || stat -f%z "$file")
             if [ -n "$size" ]; then
-                # 转换为可读格式，带空格
+                # Convert to readable format with space
                 human_readable_size=$(human_readable_size "$size")
                 items_details+=("$human_readable_size")
             else
-                items_details+=("")  # 如果无法获取大小，显示为空
+                items_details+=("")  # Show empty if unable to get size
             fi
         fi
     done
 }
 
-# 获取当前终端窗口的大小
+# Get the size of the current terminal window
 function get_terminal_size {
-    rows=$(tput lines)  # 获取终端的行数
-    cols=$(tput cols)  # 获取终端的列数
-    display_lines=$((rows - 5))  # 计算可显示的行数，保留顶部提示区域
-    left_width=$((cols / 2))  # 左侧的宽度为终端的一半
-    right_width=$((cols - left_width - 2))  # 右侧宽度减去分隔符
+    rows=$(tput lines)  # Get terminal rows
+    cols=$(tput cols)  # Get terminal columns
+    display_lines=$((rows - 5))  # Calculate number of displayable lines, reserving top area
+    left_width=$((cols / 2))  # Left side width is half the terminal
+    right_width=$((cols - left_width - 2))  # Right side width, subtracting separator
 }
 
-# 显示文件和文件夹列表，并根据可显示区域滚动
+# Display the list of files and directories, with scrolling if necessary
 function display_items {
     local current=$1
     local offset=$2
     local total=${#items[@]}
-    
-    # 文件名宽度，确保对齐
-    local name_width=$((left_width - 12))  # 保留部分空位显示文件大小
+
+    # Set file name width to ensure alignment
+    local name_width=$((left_width - 12))  # Leave space for file size
     local size_width=10
-    
+
     for ((i = 0; i < display_lines && (i + offset) < total; i++)); do
         file="${items[$((i + offset))]}"
         file_detail="${items_details[$((i + offset))]}"
-        
+
         if [ -d "$file" ]; then
-            # 文件夹显示为蓝色
+            # Display directories in blue
             if [ $((i + offset)) -eq $current ]; then
-                printf "\e[1;34m> %-*s\e[0m\n" "$name_width" "$file/"  # 高亮选中的文件夹，左对齐
+                printf "\e[1;34m> %-*s\e[0m\n" "$name_width" "$file/"  # Highlight selected directory, left aligned
             else
-                printf "  \e[1;34m%-*s\e[0m\n" "$name_width" "$file/"  # 普通文件夹，左对齐
+                printf "  \e[1;34m%-*s\e[0m\n" "$name_width" "$file/"  # Regular directory, left aligned
             fi
         elif [ -x "$file" ]; then
-            # 可执行文件显示为绿色
+            # Display executable files in green
             if [ $((i + offset)) -eq $current ]; then
-                printf "\e[1;32m> %-*s %*s\e[0m\n" "$name_width" "$file" "$size_width" ""  # 高亮选中的可执行文件，左对齐，右侧空白
+                printf "\e[1;32m> %-*s %*s\e[0m\n" "$name_width" "$file" "$size_width" ""  # Highlight selected executable, left aligned, right empty
             else
-                printf "  \e[1;32m%-*s %*s\e[0m\n" "$name_width" "$file" "$size_width" ""  # 普通可执行文件，左对齐，右侧空白
+                printf "  \e[1;32m%-*s %*s\e[0m\n" "$name_width" "$file" "$size_width" ""  # Regular executable, left aligned, right empty
             fi
         else
-            # 普通文件显示大小
+            # Display regular files with size
             if [ $((i + offset)) -eq $current ]; then
-                printf "> %-*s %*s\n" "$name_width" "$file" "$size_width" "$file_detail"  # 高亮选中的普通文件，左对齐，右侧显示大小
+                printf "> %-*s %*s\n" "$name_width" "$file" "$size_width" "$file_detail"  # Highlight selected file, left aligned, right with size
             else
-                printf "  %-*s %*s\n" "$name_width" "$file" "$size_width" "$file_detail"  # 普通文件，左对齐，右侧显示大小
+                printf "  %-*s %*s\n" "$name_width" "$file" "$size_width" "$file_detail"  # Regular file, left aligned, right with size
             fi
         fi
     done
 }
 
-# 显示所选文件的前几行内容
+# Preview the first few lines of the selected file
 function display_file_preview {
     local file=$1
-    local max_lines_to_display=$((rows - 7))  # 可显示的最大行数，根据当前终端大小
+    local max_lines_to_display=$((rows - 7))  # Maximum lines to display based on terminal size
     local lines_to_display=$((max_lines_to_display))
 
     if [ -f "$file" ]; then
-        # 使用 head 命令读取前几行，并通过 perl 检测二进制字符
+        # Use head to read the first few lines, and check for binary characters with perl
         if head -n "$lines_to_display" "$file" | perl -ne 'if (/[\x00-\x08\x0B\x0C\x0E-\x1F]/) { exit 1 }'; then
-            # 将光标移到右侧显示区域
+            # Move cursor to right display area
             tput cup 2 $((left_width + 2))
-            printf "\e[1;37m%-*s\e[0m\n" "$right_width" "文件预览：$file"
+            printf "\e[1;37m%-*s\e[0m\n" "$right_width" "File preview: $file"
 
-            # 动态生成分隔符，长度与右侧显示区域一致
+            # Dynamically generate separator, matching right side width
             tput cup 3 $((left_width + 2))
             printf "%0.s-" $(seq 1 $right_width)
             echo ""
 
-            # 使用 head 命令直接获取文件的前几行
+            # Use head to get the first few lines of the file
             head -n "$lines_to_display" "$file" | while IFS= read -r line; do
-                # 如果超过了右侧宽度，进行截断并添加"..."符号
+                # Truncate the line if it exceeds the right side width, adding "..." at the end
                 if [ "${#line}" -gt "$right_width" ]; then
-                    line="${line:0:right_width-3}..."  # 截断行并添加"..."符号
+                    line="${line:0:right_width-3}..."  # Truncate and add "..." symbol
                 fi
-                # 移动光标到右侧显示区域
+                # Move cursor to right display area
                 tput cup $((4 + count)) $((left_width + 2))
                 printf "%-${right_width}s\n" "$line"
                 ((count++))
             done
 
-            # 动态生成结束分隔符
+            # Dynamically generate end separator
             tput cup $((3 + lines_to_display + 1)) $((left_width + 2))
             printf "%0.s-" $(seq 1 $right_width)
             echo ""
         else
-            # 二进制文件显示简短提示
+            # Display a short message for binary files
             tput cup 2 $((left_width + 2))
-            printf "\e[1;37m%-*s\e[0m\n" "$right_width" "文件预览：$file (二进制文件，不支持预览)"
+            printf "\e[1;37m%-*s\e[0m\n" "$right_width" "File preview: $file (Binary file, preview not supported)"
         fi
     fi
 }
 
-# 主循环
+# Main loop
 function main {
-    local current_selection=0   # 当前选择的文件或文件夹的索引
-    local scroll_offset=0  # 控制滚动偏移量
+    local current_selection=0   # Index of currently selected file or directory
+    local scroll_offset=0  # Control scroll offset
     list_items
     get_terminal_size
     init_ui
 
     while true; do
-        get_terminal_size  # 每次循环都重新获取窗口大小
-        # 刷新屏幕并重新显示内容
+        get_terminal_size  # Recalculate terminal size on each iteration
+        # Refresh the screen and redisplay content
         tput clear
         init_ui
 
-        # 显示左侧的文件列表
-        display_items $current_selection $scroll_offset  # 显示文件和文件夹列表
-        # 显示右侧的文件预览（如果是文件）
+        # Display the list of files on the left
+        display_items $current_selection $scroll_offset  # Display files and directories
+        # Display file preview on the right (if a file)
         display_file_preview "${items[$current_selection]}"
 
-        # 等待用户按键
+        # Wait for user input
         read -rsn1 key
         case "$key" in
-            $'\x1b')  # 处理箭头按键
+            $'\x1b')  # Handle arrow keys
                 read -rsn2 key
                 case "$key" in
-                    "[A")  # 上箭头
+                    "[A")  # Up arrow
                         ((current_selection--))
                         if [ $current_selection -lt 0 ]; then
-                            current_selection=$((${#items[@]} - 1))  # 跳转到最后一个文件
-                            scroll_offset=$((${#items[@]} - display_lines))  # 滚动到最底部
+                            current_selection=$((${#items[@]} - 1))  # Jump to the last file
+                            scroll_offset=$((${#items[@]} - display_lines))  # Scroll to the bottom
                             if [ $scroll_offset -lt 0 ]; then
-                                scroll_offset=0  # 防止文件数量少于 display_lines 的情况
+                                scroll_offset=0  # Prevent scrolling beyond available files
                             fi
                         elif [ $current_selection -lt $scroll_offset ]; then
-                            ((scroll_offset--))  # 滚动向上
+                            ((scroll_offset--))  # Scroll up
                         fi
                         ;;
-                    "[B")  # 下箭头
+                    "[B")  # Down arrow
                         ((current_selection++))
                         if [ $current_selection -ge ${#items[@]} ]; then
-                            current_selection=0  # 跳转到第一个文件
-                            scroll_offset=0  # 滚动到最顶部
+                            current_selection=0  # Jump to the first file
+                            scroll_offset=0  # Scroll to the top
                         elif [ $current_selection -ge $((scroll_offset + display_lines)) ]; then
-                            ((scroll_offset++))  # 滚动向下
+                            ((scroll_offset++))  # Scroll down
                         fi
                         ;;
-                    "[C")  # 右箭头：如果光标在文件夹上，进入文件夹
+                    "[C")  # Right arrow: Enter directory if on a folder
                         if [ -d "${items[$current_selection]}" ]; then
                             cd "${items[$current_selection]}"
                             list_items
@@ -206,7 +206,7 @@ function main {
                             init_ui
                         fi
                         ;;
-                    "[D")  # 左箭头：返回上一层文件夹
+                    "[D")  # Left arrow: Go back to the previous folder
                         cd ..
                         list_items
                         current_selection=0
@@ -215,27 +215,27 @@ function main {
                         ;;
                 esac
                 ;;
-            "")  # 回车键：如果是目录，进入该目录；如果是文件，预览文件
+            "")  # Enter key: Enter directory or preview file
                 if [ -d "${items[$current_selection]}" ]; then
                     cd "${items[$current_selection]}"
-                    list_items  # 刷新文件列表
+                    list_items  # Refresh the file list
                     current_selection=0
-                    scroll_offset=0  # 重置滚动偏移
-                    get_terminal_size  # 重新获取窗口大小
+                    scroll_offset=0  # Reset scroll offset
+                    get_terminal_size  # Recalculate terminal size
                     init_ui
                 elif [ -f "${items[$current_selection]}" ]; then
-                    # 如果是文件，显示预览
+                    # Preview the file if selected
                     display_file_preview "${items[$current_selection]}"
                 fi
                 ;;
-            q)  # 按 'q' 退出并进入当前浏览的目录
-                cd "$(pwd)"
+            q)  # Press 'q' to quit and return to the current directory
                 tput clear
+                echo "$(pwd)"
                 exit 0
                 ;;
         esac
     done
 }
 
-# 运行主程序
+# Run the main program
 main
